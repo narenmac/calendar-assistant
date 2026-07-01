@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: gcal-mcp
+
+  ai:
+    mcp:
+      server:
+        name: gcal-mcp
+        version: 1.0.0
+        # SSE transport is auto-configured by spring-ai-mcp-server-webmvc-spring-boot-starter
+        # Endpoints exposed:
+        #   GET  /sse          - client connects here to receive tool schemas and results
+        #   POST /mcp/message  - client sends tool call requests here
+
+server:
+  port: 8090
+
+logging:
+  level:
+    com.calendarassistant: DEBUG
+    org.springframework.ai: INFO

@@ -1,0 +1,19 @@
+# Environment files — never commit real credentials
+.env
+**/.env
+
+# Maven build output
+target/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store

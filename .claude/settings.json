@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Tip: run /review to check these changes for issues.'"
+          }
+        ]
+      }
+    ]
+  }
+}
