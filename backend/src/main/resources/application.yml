@@ -12,13 +12,6 @@ spring:
         options:
           model: llama-3.3-70b-versatile
 
-    # MCP client: connects to the custom gcal-mcp Spring Boot MCP server
-    mcp:
-      client:
-        sse:
-          connections:
-            gcal-mcp:
-              url: ${GCAL_MCP_URL:http://localhost:8090}
 
 server:
   port: 8080

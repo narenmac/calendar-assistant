@@ -1,11 +1,12 @@
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+        - VITE_BACKEND_URL=http://localhost:8080
     ports:
       - "5173:80"
-    environment:
-      - VITE_BACKEND_URL=http://localhost:8080
-      - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     depends_on:
       - backend
 
@@ -14,8 +15,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GROQ_API_KEY=${GROQ_API_KEY}
       - GCAL_MCP_URL=http://gcal-mcp:8090
     depends_on:
       - gcal-mcp

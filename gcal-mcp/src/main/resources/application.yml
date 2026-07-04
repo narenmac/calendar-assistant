@@ -14,6 +14,14 @@ spring:
 
 server:
   port: 8090
+  # Keep SSE connections alive — Azure load balancer drops idle connections after ~4 min
+  tomcat:
+    connection-timeout: 3600000   # 1 hour in ms
+
+spring:
+  mvc:
+    async:
+      request-timeout: 3600000    # 1 hour in ms — keeps /sse long-poll alive
 
 logging:
   level:
