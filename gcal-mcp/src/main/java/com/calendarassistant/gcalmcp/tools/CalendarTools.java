@@ -15,6 +15,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -106,7 +107,7 @@ public class CalendarTools {
             }
 
             log.info("Found {} events", result.size());
-            return result.toString();
+            return new ObjectMapper().writeValueAsString(result);
         } catch (Exception e) {
             log.error("Failed to list events", e);
             return "{\"error\":\"" + e.getMessage() + "\"}";
