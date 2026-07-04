@@ -52,12 +52,13 @@ export function useGoogleAuth() {
       }
     };
 
-    if (window.google?.accounts?.oauth2) {
+    const win = window as Window & { google?: typeof google };
+    if (win.google?.accounts?.oauth2) {
       trySilent();
     } else {
       // GIS script hasn't loaded yet — poll briefly
       const interval = setInterval(() => {
-        if (window.google?.accounts?.oauth2) {
+        if (win.google?.accounts?.oauth2) {
           clearInterval(interval);
           clearTimeout(timeout);
           trySilent();
