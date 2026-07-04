@@ -6,12 +6,12 @@ import EventsPanel from './components/EventsPanel';
 import ChatPanel from './components/ChatPanel';
 
 export default function App() {
-  const { accessToken, userInfo, signIn, signOut } = useGoogleAuth();
+  const { accessToken, userInfo, signIn, signOut, autoSigningIn } = useGoogleAuth();
   // Incrementing this triggers EventsPanel to re-fetch after the assistant replies
   const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
 
   if (!accessToken) {
-    return <SignIn onSignIn={signIn} />;
+    return <SignIn onSignIn={signIn} loading={autoSigningIn} />;
   }
 
   return (

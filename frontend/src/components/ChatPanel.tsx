@@ -12,10 +12,16 @@ export default function ChatPanel({ accessToken, onAssistantReply }: Props) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Keep focus on the input whenever loading finishes or component mounts
+  useEffect(() => {
+    if (!loading) inputRef.current?.focus();
+  }, [loading]);
 
   async function send() {
     const text = input.trim();
@@ -84,6 +90,7 @@ export default function ChatPanel({ accessToken, onAssistantReply }: Props) {
         display: 'flex', gap: '8px', background: '#fff',
       }}>
         <input
+          ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
