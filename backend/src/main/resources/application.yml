@@ -4,13 +4,20 @@ spring:
 
   ai:
     # LLM: Groq (OpenAI-compatible, free tier, supports function calling)
-    # To switch to Gemini native, replace with spring-ai-vertex-ai-gemini-spring-boot-starter
     openai:
       api-key: ${GROQ_API_KEY}
       base-url: https://api.groq.com/openai
       chat:
         options:
           model: llama-3.3-70b-versatile
+
+    # Disable Boot autoconfiguration — MCP client is created per-request in ScheduleService
+    mcp:
+      client:
+        enabled: false
+
+# gcal-mcp service URL (override via env var in Docker/Azure)
+GCAL_MCP_URL: http://localhost:8090
 
 
 server:

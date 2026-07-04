@@ -95,7 +95,9 @@ calendar-assistant/
 
 **access_token flow:** Browser → React state (never localStorage) → POST body/header → Spring Boot → injected into system prompt → LLM includes it in tool call args → gcal-mcp uses it for that request only.
 
-**LLM tool-calling loop:** Spring AI `ChatClient` with `.toolCallbacks(mcpToolCallbackProvider)` handles the loop automatically — no manual loop implementation needed.
+**Per-request MCP client (no singleton SSE):** `ScheduleService` creates a fresh `McpSyncClient` + `HttpClientSseClientTransport` for each `/schedule` and `/events` call, then closes it via try-with-resources. This avoids Azure load balancer idle timeouts (~4 min) that would drop a persistent SSE connection and cause `TimeoutException`. Spring Boot MCP autoconfiguration is disabled (`spring.ai.mcp.client.enabled: false`) — the client is managed entirely in `ScheduleService.createMcpClient()`.
+
+**LLM tool-calling loop:** Spring AI `ChatClient` with `.toolCallbacks(new SyncMcpToolCallbackProvider(...))` handles the loop automatically — no manual loop implementation needed.
 
 **Events panel refresh:** `App.tsx` increments `eventsRefreshKey` after every assistant reply, causing `EventsPanel` to re-fetch from `GET /events`.
 
@@ -138,10 +140,10 @@ docker compose up --build
 
 ### Local dev startup order
 1. Start gcal-mcp first (`./mvnw spring-boot:run` in `gcal-mcp/`)
-2. Start backend (`./mvnw spring-boot:run` in `backend/`) — it connects to gcal-mcp on startup via SSE
+2. Start backend (`./mvnw spring-boot:run` in `backend/`)
 3. Start frontend (`npm run dev` in `frontend/`)
 
-**If you restart gcal-mcp, you must also restart the backend** — the SSE connection becomes stale and tool calls will time out.
+**Restarting gcal-mcp is safe** — the backend creates a fresh MCP client per request, so there is no stale connection to worry about.
 
 ## Environment Variables
 
@@ -194,6 +196,51 @@ To switch to Gemini, replace `spring-ai-openai-spring-boot-starter` in `backend/
 
 Use the built-in `Explore` agent for all codebase searches to keep the main context clean.
 
+## Azure Deployment
+
+Resources are provisioned via Terraform in `terraform/` and images are hosted on Docker Hub under `naren433/`.
+
+| Container App | Image | Ingress |
+|---|---|---|
+| `gcal-mcp` | `naren433/cal-gcal-mcp` | Internal only (`:8090`) |
+| `backend` | `naren433/cal-backend` | External (`:8080`) |
+| `frontend` | `naren433/cal-frontend` | External (`:80`) |
+
+**One-time infra setup:**
+```bash
+cd terraform
+terraform init
+terraform apply          # provisions RG, Log Analytics, Container Apps environment, 3 apps
+```
+
+**Manual redeploy (without CI/CD):**
+```bash
+docker build --platform linux/amd64 -t naren433/cal-backend:latest ./backend
+docker push naren433/cal-backend:latest
+az containerapp update --name backend --resource-group calendar-assistant-rg \
+  --image naren433/cal-backend:latest --revision-suffix v<N>
+```
+
+`GCAL_MCP_URL=http://gcal-mcp` inside Azure — Container Apps environment DNS resolves service names automatically.
+
+## CI/CD (GitHub Actions)
+
+Workflow: `.github/workflows/ci-cd.yml` — triggers on every push to `main`.
+
+**Jobs:**
+1. `build-and-push` — builds all 3 images for `linux/amd64`, pushes to Docker Hub with `:latest` + short SHA tag
+2. `deploy` — logs into Azure, runs `az containerapp update` for each service with the SHA-tagged image
+
+**Required GitHub Secrets:**
+
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | `naren433` |
+| `DOCKERHUB_TOKEN` | Docker Hub access token |
+| `AZURE_CREDENTIALS` | Service principal JSON (`az ad sp create-for-rbac --role contributor`) |
+| `GOOGLE_CLIENT_ID` | GCP OAuth client ID (baked into frontend image at build time) |
+| `BACKEND_URL` | Full Azure URL of the backend Container App (baked into frontend image) |
+
 ## Google Cloud Setup (prerequisite)
 
 1. Create a Google Cloud project → enable **Google Calendar API**
@@ -204,7 +251,3 @@ Use the built-in `Explore` agent for all codebase searches to keep the main cont
    - Authorised redirect URIs: `http://localhost:5173`
 5. Copy the Client ID → set as `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID`
 
-## Pending
-
-- CI/CD: GitHub Actions → Docker Hub (deferred)
-- Azure Container Apps via Terraform (deferred)
