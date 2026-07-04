@@ -1,10 +1,14 @@
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080';
 
-export async function scheduleRequest(text: string, accessToken: string): Promise<string> {
+export async function scheduleRequest(
+  text: string,
+  accessToken: string,
+  history: { role: string; text: string }[]
+): Promise<string> {
   const res = await fetch(`${BACKEND_URL}/schedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, access_token: accessToken }),
+    body: JSON.stringify({ text, access_token: accessToken, messages: history }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));

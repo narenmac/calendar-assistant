@@ -27,12 +27,15 @@ export default function ChatPanel({ accessToken, onAssistantReply }: Props) {
     const text = input.trim();
     if (!text || loading) return;
 
+    // Capture history before state update — these are the previous turns the LLM needs
+    const history = messages.map(m => ({ role: m.role, text: m.text }));
+
     setMessages(prev => [...prev, { role: 'user', text }]);
     setInput('');
     setLoading(true);
 
     try {
-      const reply = await scheduleRequest(text, accessToken);
+      const reply = await scheduleRequest(text, accessToken, history);
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
       onAssistantReply(); // trigger events panel refresh after any reply
     } catch (e: unknown) {

@@ -2,6 +2,7 @@ package com.calendarassistant.backend.service;
 
 import com.calendarassistant.backend.model.ScheduleRequest;
 import com.calendarassistant.backend.model.ScheduleResponse;
+import com.calendarassistant.backend.model.ScheduleRequest.ChatMessage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpClient;
@@ -11,13 +12,18 @@ import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpSchema.Implementation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -39,9 +45,22 @@ public class ScheduleService {
 
         String systemPrompt = buildSystemPrompt(request.getAccessToken());
 
+        // Build conversation history so the LLM has full context across turns
+        List<Message> history = new ArrayList<>();
+        if (request.getMessages() != null) {
+            for (ChatMessage m : request.getMessages()) {
+                if ("user".equals(m.getRole())) {
+                    history.add(new UserMessage(m.getText()));
+                } else if ("assistant".equals(m.getRole())) {
+                    history.add(new AssistantMessage(m.getText()));
+                }
+            }
+        }
+
         try (McpSyncClient mcpClient = createMcpClient()) {
             String reply = chatClient.prompt()
                     .system(systemPrompt)
+                    .messages(history)
                     .user(request.getText())
                     .toolCallbacks(new SyncMcpToolCallbackProvider(List.of(mcpClient)))
                     .call()
@@ -75,13 +94,26 @@ public class ScheduleService {
                     new TypeReference<List<Map<String, String>>>() {});
             if (events.isEmpty()) return "No upcoming events.";
 
-            var fmt = DateTimeFormatter.ofPattern("MMM d, h:mm a");
+            var timeFmt = DateTimeFormatter.ofPattern("MMM d, h:mm a");
+            var dateFmt = DateTimeFormatter.ofPattern("MMM d");
             var sb = new StringBuilder();
             for (var e : events) {
                 String summary = e.getOrDefault("summary", "(No title)");
                 String start   = e.getOrDefault("start", "");
-                String display = start.isEmpty() ? "" : " — " +
-                        ZonedDateTime.parse(start).format(fmt);
+                String display = "";
+                if (!start.isEmpty()) {
+                    try {
+                        // timed event: "2026-07-04T14:00:00.000Z"
+                        display = " — " + ZonedDateTime.parse(start).format(timeFmt);
+                    } catch (Exception ex1) {
+                        try {
+                            // all-day event: "2026-07-04"
+                            display = " — " + LocalDate.parse(start).format(dateFmt);
+                        } catch (Exception ex2) {
+                            display = " — " + start;
+                        }
+                    }
+                }
                 sb.append("• ").append(summary).append(display).append("\n");
             }
             return sb.toString().trim();
