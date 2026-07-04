@@ -3,6 +3,9 @@ package com.calendarassistant.backend.service;
 import com.calendarassistant.backend.model.ScheduleRequest;
 import com.calendarassistant.backend.model.ScheduleResponse;
 import com.calendarassistant.backend.model.ScheduleRequest.ChatMessage;
+import java.util.LinkedHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpClient;
@@ -88,39 +91,59 @@ public class ScheduleService {
         }
     }
 
-    private String formatEventList(String json) {
-        try {
-            var events = new ObjectMapper().readValue(json,
-                    new TypeReference<List<Map<String, String>>>() {});
-            if (events.isEmpty()) return "No upcoming events.";
+    private String formatEventList(String raw) {
+        List<Map<String, String>> events = parseEvents(raw);
+        if (events.isEmpty()) return "No upcoming events.";
 
-            var timeFmt = DateTimeFormatter.ofPattern("MMM d, h:mm a");
-            var dateFmt = DateTimeFormatter.ofPattern("MMM d");
-            var sb = new StringBuilder();
-            for (var e : events) {
-                String summary = e.getOrDefault("summary", "(No title)");
-                String start   = e.getOrDefault("start", "");
-                String display = "";
-                if (!start.isEmpty()) {
+        var timeFmt = DateTimeFormatter.ofPattern("MMM d, h:mm a");
+        var dateFmt = DateTimeFormatter.ofPattern("MMM d");
+        var sb = new StringBuilder();
+        for (var e : events) {
+            String summary = e.getOrDefault("summary", "(No title)");
+            String start   = e.getOrDefault("start", "");
+            String display = "";
+            if (!start.isEmpty()) {
+                try {
+                    display = " — " + ZonedDateTime.parse(start).format(timeFmt);
+                } catch (Exception ex1) {
                     try {
-                        // timed event: "2026-07-04T14:00:00.000Z"
-                        display = " — " + ZonedDateTime.parse(start).format(timeFmt);
-                    } catch (Exception ex1) {
-                        try {
-                            // all-day event: "2026-07-04"
-                            display = " — " + LocalDate.parse(start).format(dateFmt);
-                        } catch (Exception ex2) {
-                            display = " — " + start;
-                        }
+                        display = " — " + LocalDate.parse(start).format(dateFmt);
+                    } catch (Exception ex2) {
+                        display = " — " + start;
                     }
                 }
-                sb.append("• ").append(summary).append(display).append("\n");
             }
-            return sb.toString().trim();
-        } catch (Exception ex) {
-            log.warn("Could not parse event list JSON, returning raw", ex);
-            return json;
+            sb.append("• ").append(summary).append(display).append("\n");
         }
+        return sb.toString().trim();
+    }
+
+    /** Parses both proper JSON and Java's List.toString() format */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, String>> parseEvents(String raw) {
+        String text = raw.trim();
+        // Strip surrounding quotes if the whole string is JSON-encoded
+        if (text.startsWith("\"") && text.endsWith("\"")) {
+            text = text.substring(1, text.length() - 1).replace("\\\"", "\"");
+        }
+        // Try proper JSON first
+        try {
+            return new ObjectMapper().readValue(text, new TypeReference<>() {});
+        } catch (Exception ignored) {}
+
+        // Fallback: parse Java's [{key=value, key=value}, ...] toString format
+        List<Map<String, String>> result = new ArrayList<>();
+        Matcher block = Pattern.compile("\\{([^}]+)}").matcher(text);
+        while (block.find()) {
+            Map<String, String> entry = new LinkedHashMap<>();
+            // Each field: word chars before '=', value up to the next ', word=' or end
+            Matcher field = Pattern.compile("(\\w+)=([^=]+?)(?=,\\s*\\w+=|$)").matcher(block.group(1));
+            while (field.find()) {
+                entry.put(field.group(1).trim(), field.group(2).trim());
+            }
+            if (!entry.isEmpty()) result.add(entry);
+        }
+        return result;
     }
 
     private McpSyncClient createMcpClient() {
